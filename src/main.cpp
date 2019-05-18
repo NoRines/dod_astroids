@@ -585,10 +585,14 @@ void addBulletsToShapeData(const std::vector<Entity>& entities, EntityManager& m
                 1.0f, 0.0f, positions[e].x, positions[e].y,
                 bullets[e].color, shapeData.size(), shapeData.size() + 4});
 
-        shapeData.emplace_back(bullets[e].xLast);
-        shapeData.emplace_back(bullets[e].yLast);
-        shapeData.emplace_back(positions[e].x);
-        shapeData.emplace_back(positions[e].y);
+        if(std::abs(bullets[e].xLast - positions[e].x) < windowWidth / 2.0f &&
+                std::abs(bullets[e].yLast - positions[e].y) < windowHeight / 2.0f )
+        {
+            shapeData.emplace_back(bullets[e].xLast);
+            shapeData.emplace_back(bullets[e].yLast);
+            shapeData.emplace_back(positions[e].x);
+            shapeData.emplace_back(positions[e].y);
+        }
     }
 }
 
