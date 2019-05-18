@@ -191,8 +191,8 @@ void renderShapes(const std::vector<float>& shapeData, const std::vector<ShapeDr
 using Entity = std::size_t;
 
 constexpr std::size_t maxComponents = 32;
-using ComponentBitset = std::bitset<maxComponents>;
 
+using ComponentBitset = std::bitset<maxComponents>;
 
 inline std::size_t makeNewComponentId()
 {
@@ -238,13 +238,13 @@ struct CShape
     std::size_t toI;
 };
 
-struct CController
+struct CControlMove
 {
     float accelFactor;
     float rotationSpeed;
 };
 
-struct CInvisible
+struct CControlInvisible
 {
     bool isVisible;
 };
@@ -261,7 +261,7 @@ struct CLifeTime
     float time;
 };
 
-struct CCanFire
+struct CControlFire
 {
     bool fired;
 };
@@ -275,11 +275,11 @@ struct EntityManager
     std::vector<CScale> scaleList;
     std::vector<CRotation> rotationList;
     std::vector<CShape> shapeList;
-    std::vector<CController> controllList;
-    std::vector<CInvisible> invisibleList;
+    std::vector<CControlMove> moveList;
+    std::vector<CControlInvisible> invisibleList;
     std::vector<CBullet> bulletList;
     std::vector<CLifeTime> lifeTimeList;
-    std::vector<CCanFire> canFireList;
+    std::vector<CControlFire> canFireList;
 
     std::vector<ComponentBitset> componentBitsets;
 
@@ -293,7 +293,7 @@ Entity addEntity(EntityManager& manager)
     manager.scaleList.push_back({});
     manager.rotationList.push_back({});
     manager.shapeList.push_back({});
-    manager.controllList.push_back({});
+    manager.moveList.push_back({});
     manager.invisibleList.push_back({});
     manager.bulletList.push_back({});
     manager.lifeTimeList.push_back({});
@@ -318,7 +318,7 @@ void delEntity(EntityManager& manager, Entity e)
     removeEntityFromVector(manager.scaleList, e);
     removeEntityFromVector(manager.rotationList, e);
     removeEntityFromVector(manager.shapeList, e);
-    removeEntityFromVector(manager.controllList, e);
+    removeEntityFromVector(manager.moveList, e);
     removeEntityFromVector(manager.invisibleList, e);
     removeEntityFromVector(manager.bulletList, e);
     removeEntityFromVector(manager.lifeTimeList, e);
@@ -380,16 +380,16 @@ void addCShape(EntityManager& manager, Entity e, const CShape& shape)
     manager.componentBitsets[e][getUniqueComponentId<CShape>()] = true;
 }
 
-void addCController(EntityManager& manager, Entity e, const CController& controller)
+void addCControlMove(EntityManager& manager, Entity e, const CControlMove& controlMove)
 {
-    manager.controllList[e] = controller;
-    manager.componentBitsets[e][getUniqueComponentId<CController>()] = true;
+    manager.moveList[e] = controlMove;
+    manager.componentBitsets[e][getUniqueComponentId<CControlMove>()] = true;
 }
 
-void addCInvisible(EntityManager& manager, Entity e, const CInvisible& invisible)
+void addCInvisible(EntityManager& manager, Entity e, const CControlInvisible& invisible)
 {
     manager.invisibleList[e] = invisible;
-    manager.componentBitsets[e][getUniqueComponentId<CInvisible>()] = true;
+    manager.componentBitsets[e][getUniqueComponentId<CControlInvisible>()] = true;
 }
 
 void addCBullet(EntityManager& manager, Entity e, const CBullet& bullet)
@@ -404,16 +404,24 @@ void addCLifeTime(EntityManager& manager, Entity e, const CLifeTime& lifeTime)
     manager.componentBitsets[e][getUniqueComponentId<CLifeTime>()] = true;
 }
 
-void addCCanFire(EntityManager& manager, Entity e, const CCanFire& canfire)
+void addCCanFire(EntityManager& manager, Entity e, const CControlFire& canfire)
 {
     manager.canFireList[e] = canfire;
-    manager.componentBitsets[e][getUniqueComponentId<CCanFire>()] = true;
+    manager.componentBitsets[e][getUniqueComponentId<CControlFire>()] = true;
 }
 
 // Entity behaviour
 void createAstroid(EntityManager& manager, std::mt19937& randGen, float scale, float xPos = 0.0f, float yPos = 0.0f);
 void createShip(EntityManager& manager);
 void createBullet(EntityManager& manager, float xPos, float yPos, float dir);
+
+ComponentBitset getSaveLastPosBitset()
+{
+    ComponentBitset saveLastPosBitset;
+    saveLastPosBitset[getUniqueComponentId<CPosition>()] = true;
+    saveLastPosBitset[getUniqueComponentId<CBullet>()] = true;
+    return saveLastPosBitset;
+}
 
 void saveLastPos(const std::vector<Entity>& entities, EntityManager& manager)
 {
@@ -425,6 +433,14 @@ void saveLastPos(const std::vector<Entity>& entities, EntityManager& manager)
         bullets[e].xLast = positions[e].x;
         bullets[e].yLast = positions[e].y;
     }
+}
+
+ComponentBitset getMoveEntitiesBitset()
+{
+    ComponentBitset moveBitset;
+    moveBitset[getUniqueComponentId<CPosition>()] = true;
+    moveBitset[getUniqueComponentId<CVelocity>()] = true;
+    return moveBitset;
 }
 
 void moveEntities(const std::vector<Entity>& entities, EntityManager& manager, float ft)
@@ -449,6 +465,13 @@ void moveEntities(const std::vector<Entity>& entities, EntityManager& manager, f
     }
 }
 
+ComponentBitset getRotateEntitiesBitset()
+{
+    ComponentBitset rotateBitset;
+    rotateBitset[getUniqueComponentId<CRotation>()] = true;
+    return rotateBitset;
+}
+
 void rotateEntites(const std::vector<Entity>& entities, EntityManager& manager, float ft)
 {
     auto& rotations = manager.rotationList;
@@ -464,26 +487,36 @@ void rotateEntites(const std::vector<Entity>& entities, EntityManager& manager, 
     }
 }
 
+ComponentBitset getControllMoveEntitiesBitset()
+{
+    ComponentBitset controllerBitset;
+    controllerBitset[getUniqueComponentId<CPosition>()] = true;
+    controllerBitset[getUniqueComponentId<CVelocity>()] = true;
+    controllerBitset[getUniqueComponentId<CRotation>()] = true;
+    controllerBitset[getUniqueComponentId<CControlMove>()] = true;
+    return controllerBitset;
+}
+
 void controllEnities(const std::vector<Entity>& entities, EntityManager& manager, const KeyMap& keymap, float ft)
 {
     auto& positions = manager.posList;
     auto& velocities = manager.velocityList;
     auto& rotations = manager.rotationList;
-    auto& controllers = manager.controllList;
+    auto& controlMoves = manager.moveList;
 
     for(auto& e : entities)
     {
         rotations[e].rotationSpeed = 0.0f;
 
         if(isKeyDown(keymap, SDLK_LEFT))
-            rotations[e].rotationSpeed -= controllers[e].rotationSpeed;
+            rotations[e].rotationSpeed -= controlMoves[e].rotationSpeed;
         else if(isKeyDown(keymap, SDLK_RIGHT))
-            rotations[e].rotationSpeed += controllers[e].rotationSpeed;
+            rotations[e].rotationSpeed += controlMoves[e].rotationSpeed;
 
         if(isKeyDown(keymap, SDLK_UP))
         {
-            velocities[e].xVel += std::cos(rotations[e].dir) * ft * controllers[e].accelFactor;
-            velocities[e].yVel += std::sin(rotations[e].dir) * ft * controllers[e].accelFactor;
+            velocities[e].xVel += std::cos(rotations[e].dir) * ft * controlMoves[e].accelFactor;
+            velocities[e].yVel += std::sin(rotations[e].dir) * ft * controlMoves[e].accelFactor;
         }
 
         velocities[e].xVel *= 0.99f;
@@ -491,10 +524,16 @@ void controllEnities(const std::vector<Entity>& entities, EntityManager& manager
     }
 }
 
+ComponentBitset getShowInvisibleEntitiesBitset()
+{
+    ComponentBitset invisibleControllBitset;
+    invisibleControllBitset[getUniqueComponentId<CControlInvisible>()] = true;
+    return invisibleControllBitset;
+}
+
 void showInvisibleEntities(const std::vector<Entity>& entities, EntityManager& manager, const KeyMap& keymap)
 {
     auto& invisibles = manager.invisibleList;
-    auto& controller = manager.controllList;
 
     auto& componentBitsets = manager.componentBitsets;
 
@@ -510,6 +549,13 @@ void showInvisibleEntities(const std::vector<Entity>& entities, EntityManager& m
         else
             componentBitsets[e][getUniqueComponentId<CShape>()] = true;
     }
+}
+
+ComponentBitset getLifeTimeEntitiesBitset()
+{
+    ComponentBitset lifeTimeBitset;
+    lifeTimeBitset[getUniqueComponentId<CLifeTime>()] = true;
+    return lifeTimeBitset;
 }
 
 void lifeTimeEntities(const std::vector<Entity>& entities, EntityManager& manager, float ft)
@@ -528,13 +574,22 @@ void lifeTimeEntities(const std::vector<Entity>& entities, EntityManager& manage
     }
 }
 
+ComponentBitset getFireingEntitiesBitset()
+{
+    ComponentBitset canFireBitset;
+    canFireBitset[getUniqueComponentId<CControlFire>()] = true;
+    canFireBitset[getUniqueComponentId<CPosition>()] = true;
+    canFireBitset[getUniqueComponentId<CRotation>()] = true;
+    canFireBitset[getUniqueComponentId<CScale>()] = true;
+    return canFireBitset;
+}
+
 void fireingEntities(const std::vector<Entity>& entities, EntityManager& manager, const KeyMap& keymap)
 {
     auto& canFires = manager.canFireList;
     auto& positions = manager.posList;
     auto& rotations = manager.rotationList;
     auto& scales = manager.scaleList;
-    auto& controllers = manager.controllList;
 
     for(auto& e : entities)
     {
@@ -548,6 +603,16 @@ void fireingEntities(const std::vector<Entity>& entities, EntityManager& manager
         else if(!isKeyDown(keymap, SDLK_SPACE) && canFires[e].fired)
             canFires[e].fired = false;
     }
+}
+
+ComponentBitset getMakeShapeDataFromEntitiesBitset()
+{
+    ComponentBitset makeDataFromEntitiesBitset;
+    makeDataFromEntitiesBitset[getUniqueComponentId<CPosition>()] = true;
+    makeDataFromEntitiesBitset[getUniqueComponentId<CScale>()] = true;
+    makeDataFromEntitiesBitset[getUniqueComponentId<CRotation>()] = true;
+    makeDataFromEntitiesBitset[getUniqueComponentId<CShape>()] = true;
+    return makeDataFromEntitiesBitset;
 }
 
 void makeShapeDataFromEntities(const std::vector<Entity>& entities, EntityManager& manager, std::vector<float>& shapeData, std::vector<ShapeDrawInfo>& drawInfo)
@@ -572,6 +637,14 @@ void makeShapeDataFromEntities(const std::vector<Entity>& entities, EntityManage
         for(auto& v : shapeDefs[shapeIndex])
             shapeData.emplace_back(v);
     }
+}
+
+ComponentBitset getAddBulletsToShapeDataBitset()
+{
+    ComponentBitset addBulletToShapeDataBitset;
+    addBulletToShapeDataBitset[getUniqueComponentId<CPosition>()] = true;
+    addBulletToShapeDataBitset[getUniqueComponentId<CBullet>()] = true;
+    return addBulletToShapeDataBitset;
 }
 
 void addBulletsToShapeData(const std::vector<Entity>& entities, EntityManager& manager, std::vector<float>& shapeData, std::vector<ShapeDrawInfo>& drawInfo)
@@ -639,7 +712,7 @@ void createShip(EntityManager& manager)
     addCScale(manager, flame, {scaleFactor});
     addCRotation(manager, flame, {0.0f, -M_PI/2.0f});
     addCShape(manager, flame, {(std::size_t)ShapeDef::FLAME, 0xFF0000FF});
-    addCController(manager, flame, {accelFactor, rotateFactor});
+    addCControlMove(manager, flame, {accelFactor, rotateFactor});
     addCInvisible(manager, flame, {false});
 
     Entity ship = addEntity(manager);
@@ -649,7 +722,7 @@ void createShip(EntityManager& manager)
     addCScale(manager, ship, {scaleFactor});
     addCRotation(manager, ship, {0.0f, -M_PI/2.0f});
     addCShape(manager, ship, {(std::size_t)ShapeDef::SHIP, 0x00FF00FF});
-    addCController(manager, ship, {accelFactor, rotateFactor});
+    addCControlMove(manager, ship, {accelFactor, rotateFactor});
     addCCanFire(manager, ship, {false});
 }
 
@@ -718,48 +791,15 @@ int main(int argc, char** argv)
     
     // Set up bitsets
     
-    // TODO Flytta skapandet av bitset till en getter funktion
-    ComponentBitset saveLastPosBitset;
-    saveLastPosBitset[getUniqueComponentId<CPosition>()] = true;
-    saveLastPosBitset[getUniqueComponentId<CBullet>()] = true;
-
-    ComponentBitset moveBitset;
-    moveBitset[getUniqueComponentId<CPosition>()] = true;
-    moveBitset[getUniqueComponentId<CVelocity>()] = true;
-    
-    ComponentBitset rotateBitset;
-    rotateBitset[getUniqueComponentId<CRotation>()] = true;
-
-    ComponentBitset controllerBitset;
-    controllerBitset[getUniqueComponentId<CPosition>()] = true;
-    controllerBitset[getUniqueComponentId<CVelocity>()] = true;
-    controllerBitset[getUniqueComponentId<CRotation>()] = true;
-    controllerBitset[getUniqueComponentId<CController>()] = true;
-
-    ComponentBitset invisibleControllBitset;
-    invisibleControllBitset[getUniqueComponentId<CInvisible>()] = true;
-    invisibleControllBitset[getUniqueComponentId<CController>()] = true;
-
-    ComponentBitset lifeTimeBitset;
-    lifeTimeBitset[getUniqueComponentId<CLifeTime>()] = true;
-
-    ComponentBitset canFireBitset;
-    canFireBitset[getUniqueComponentId<CCanFire>()] = true;
-    canFireBitset[getUniqueComponentId<CPosition>()] = true;
-    canFireBitset[getUniqueComponentId<CRotation>()] = true;
-    canFireBitset[getUniqueComponentId<CScale>()] = true;
-    canFireBitset[getUniqueComponentId<CController>()] = true;
-
-    ComponentBitset makeDataFromEntitiesBitset;
-    makeDataFromEntitiesBitset[getUniqueComponentId<CPosition>()] = true;
-    makeDataFromEntitiesBitset[getUniqueComponentId<CScale>()] = true;
-    makeDataFromEntitiesBitset[getUniqueComponentId<CRotation>()] = true;
-    makeDataFromEntitiesBitset[getUniqueComponentId<CShape>()] = true;
-
-    ComponentBitset addBulletToShapeDataBitset;
-    addBulletToShapeDataBitset[getUniqueComponentId<CPosition>()] = true;
-    addBulletToShapeDataBitset[getUniqueComponentId<CBullet>()] = true;
-
+    auto lifeTimeBitset = getLifeTimeEntitiesBitset();
+    auto saveLastPosBitset = getSaveLastPosBitset();
+    auto moveBitset = getMoveEntitiesBitset();
+    auto rotateBitset = getRotateEntitiesBitset();
+    auto controlMoveBitset = getControllMoveEntitiesBitset();
+    auto invisibleControllBitset = getShowInvisibleEntitiesBitset();
+    auto canFireBitset = getFireingEntitiesBitset();
+    auto makeDataFromEntitiesBitset = getMakeShapeDataFromEntitiesBitset();
+    auto addBulletToShapeDataBitset = getAddBulletsToShapeDataBitset();
 
     // TODO Undersök om ShapeDrawInfo behövs
     std::vector<float> shapeData;
@@ -805,7 +845,7 @@ int main(int argc, char** argv)
         auto rotateSysEntities = getEntitesForSystem(manager, rotateBitset);
         rotateEntites(rotateSysEntities, manager, frameTime);
 
-        auto controllerSysEntites = getEntitesForSystem(manager, controllerBitset);
+        auto controllerSysEntites = getEntitesForSystem(manager, controlMoveBitset);
         controllEnities(controllerSysEntites, manager, keymap, frameTime);
 
         auto invisibleControllSysEntities = getEntitesForSystem(manager, invisibleControllBitset);
