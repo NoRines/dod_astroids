@@ -71,14 +71,16 @@ int limitFps()
 
 enum class ShapeDef
 {
-    SHIP = 0,
-    FLAME = 1,
-    FIRST_ASTROID = 2,
-    LAST_ASTROID = 6
+    NONE = 0,
+    SHIP = 1,
+    FLAME = 2,
+    FIRST_ASTROID = 3,
+    LAST_ASTROID = 7
         // TODO (FYLL MED ALLA SHAPE SAKER...
 };
 
 static const std::vector<std::vector<float>> shapeDefs = {
+    {}, // NONE
     {6,0, -3,-3, -1,0, -3,3, 6,0}, // SHIP
     {-1,0, -4,1, -6,0, -4,-1, -1,0}, // FLAME
     {-4,-2,-2,-4,0,-2,2,-4,4,-2,3,0,4,2,1,4,-2,4,-4,2,-4,-2}, // ASTROIDS
@@ -192,7 +194,14 @@ using Entity = std::size_t;
 
 constexpr std::size_t maxComponents = 32;
 
+struct Group
+{
+    std::vector<Entity> entities;
+    bool set;
+};
+
 using ComponentBitset = std::bitset<maxComponents>;
+using GroupMap = std::unordered_map<ComponentBitset, Group>;
 
 inline std::size_t makeNewComponentId()
 {
@@ -284,6 +293,8 @@ struct EntityManager
     std::vector<ComponentBitset> componentBitsets;
 
     std::vector<Entity> entitiesToRemove;
+
+    GroupMap groupMap;
 };
 
 Entity addEntity(EntityManager& manager)
@@ -300,6 +311,13 @@ Entity addEntity(EntityManager& manager)
     manager.canFireList.push_back({});
 
     manager.componentBitsets.push_back({});
+    
+    // For now clear all cached entites. Mayby TODO add entity to the right group when created
+    for(auto& it : manager.groupMap)
+    {
+        it.second.entities.clear();
+        it.second.set = false;
+    }
 
     return manager.componentBitsets.size() - 1;
 };
@@ -331,23 +349,49 @@ void removeEntities(EntityManager& manager)
 {
     auto& entitiesToRemove = manager.entitiesToRemove;
 
+    // Clear all cached data since we cannot know if the data is correct
+    if(!entitiesToRemove.empty())
+        for(auto& it : manager.groupMap)
+        {
+            it.second.entities.clear();
+            it.second.set = false;
+        }
+
+
     for(auto& e : entitiesToRemove)
         delEntity(manager, e);
 
     entitiesToRemove.clear();
 }
 
-std::vector<Entity> getEntitesForSystem(const EntityManager& manager, ComponentBitset bitset)
+const std::vector<Entity>& getEntitesForSystem(EntityManager& manager, ComponentBitset bitset)
 {
-    // TODO: Fixa så att entities retur värden cachas
-    std::vector<Entity> entities;
-    entities.reserve(manager.componentBitsets.size());
+    auto it = manager.groupMap.find(bitset);
+
+    if(it != manager.groupMap.end())
+    {
+        if(it->second.set)
+            return it->second.entities;
+
+        for(Entity e = 0; e < manager.componentBitsets.size(); e++)
+            if((manager.componentBitsets[e] & bitset) == bitset)
+                it->second.entities.push_back(e);
+
+        it->second.set = true;
+
+        return it->second.entities;
+    }
+
+    std::vector<Entity> entites;
+    entites.reserve(manager.componentBitsets.size());
 
     for(Entity e = 0; e < manager.componentBitsets.size(); e++)
         if((manager.componentBitsets[e] & bitset) == bitset)
-            entities.push_back(e);
+            entites.push_back(e);
 
-    return entities;
+    manager.groupMap[bitset] = {entites, true};
+
+    return manager.groupMap[bitset].entities;
 }
 
 void addCPosition(EntityManager& manager, Entity e, const CPosition& pos)
@@ -528,12 +572,14 @@ ComponentBitset getShowInvisibleEntitiesBitset()
 {
     ComponentBitset invisibleControllBitset;
     invisibleControllBitset[getUniqueComponentId<CControlInvisible>()] = true;
+    invisibleControllBitset[getUniqueComponentId<CShape>()] = true;
     return invisibleControllBitset;
 }
 
 void showInvisibleEntities(const std::vector<Entity>& entities, EntityManager& manager, const KeyMap& keymap)
 {
     auto& invisibles = manager.invisibleList;
+    auto& shapes = manager.shapeList;
 
     auto& componentBitsets = manager.componentBitsets;
 
@@ -545,9 +591,9 @@ void showInvisibleEntities(const std::vector<Entity>& entities, EntityManager& m
             invisibles[e].isVisible = false;
 
         if(!invisibles[e].isVisible)
-            componentBitsets[e][getUniqueComponentId<CShape>()] = false;
+            shapes[e].shape = (std::size_t)ShapeDef::NONE;
         else
-            componentBitsets[e][getUniqueComponentId<CShape>()] = true;
+            shapes[e].shape = (std::size_t)ShapeDef::FLAME;
     }
 }
 
@@ -801,7 +847,7 @@ int main(int argc, char** argv)
     auto makeDataFromEntitiesBitset = getMakeShapeDataFromEntitiesBitset();
     auto addBulletToShapeDataBitset = getAddBulletsToShapeDataBitset();
 
-    // TODO Undersök om ShapeDrawInfo behövs
+    // To use in rendering
     std::vector<float> shapeData;
     std::vector<ShapeDrawInfo> drawInfo;
 
