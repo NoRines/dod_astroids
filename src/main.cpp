@@ -291,8 +291,7 @@ struct EntityManager
     std::vector<CControlFire> canFireList;
 
     std::vector<ComponentBitset> componentBitsets;
-
-    std::vector<Entity> entitiesToRemove;
+    std::vector<bool> markedForRemoval;
 
     GroupMap groupMap;
 };
@@ -311,6 +310,7 @@ Entity addEntity(EntityManager& manager)
     manager.canFireList.push_back({});
 
     manager.componentBitsets.push_back({});
+    manager.markedForRemoval.push_back(false);
     
     // For now clear all cached entites. Mayby TODO add entity to the right group when created
     for(auto& it : manager.groupMap)
@@ -343,25 +343,29 @@ void delEntity(EntityManager& manager, Entity e)
     removeEntityFromVector(manager.canFireList, e);
 
     removeEntityFromVector(manager.componentBitsets, e);
+    removeEntityFromVector(manager.markedForRemoval, e);
 }
 
 void removeEntities(EntityManager& manager)
 {
-    auto& entitiesToRemove = manager.entitiesToRemove;
+    bool oneEntityRemoved = false;
+    for(Entity e = 0; e < manager.markedForRemoval.size(); e++)
+    {
+        if(manager.markedForRemoval[e])
+        {
+            oneEntityRemoved = true;
+            delEntity(manager, e);
+        }
+    }
+
 
     // Clear all cached data since we cannot know if the data is correct
-    if(!entitiesToRemove.empty())
+    if(oneEntityRemoved)
         for(auto& it : manager.groupMap)
         {
             it.second.entities.clear();
             it.second.set = false;
         }
-
-
-    for(auto& e : entitiesToRemove)
-        delEntity(manager, e);
-
-    entitiesToRemove.clear();
 }
 
 const std::vector<Entity>& getEntitesForSystem(EntityManager& manager, ComponentBitset bitset)
@@ -607,16 +611,14 @@ ComponentBitset getLifeTimeEntitiesBitset()
 void lifeTimeEntities(const std::vector<Entity>& entities, EntityManager& manager, float ft)
 {
     auto& lifeTimes = manager.lifeTimeList;
-    auto& entitiesToRemove = manager.entitiesToRemove;
+    auto& markedForRemoval = manager.markedForRemoval;
 
     for(auto& e : entities)
     {
         lifeTimes[e].time -= ft;
 
         if(lifeTimes[e].time < 0.0f)
-        {
-            entitiesToRemove.push_back(e);
-        }
+            markedForRemoval[e] = true;
     }
 }
 
@@ -800,6 +802,8 @@ int main(int argc, char** argv)
 
     EntityManager manager;
 
+    createShip(manager);
+
     // Create entities
     createAstroid(manager, generator, 10.0f);
     createAstroid(manager, generator, 10.0f);
@@ -833,7 +837,6 @@ int main(int argc, char** argv)
     createAstroid(manager, generator, 2.5f);
     createAstroid(manager, generator, 2.5f);
 
-    createShip(manager);
     
     // Set up bitsets
     
