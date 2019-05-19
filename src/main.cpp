@@ -256,6 +256,7 @@ struct CControlMove
 struct CControlInvisible
 {
     bool isVisible;
+    std::size_t invisibleShape;
 };
 
 struct CBullet
@@ -589,15 +590,16 @@ void showInvisibleEntities(const std::vector<Entity>& entities, EntityManager& m
 
     for(auto& e : entities)
     {
-        if(isKeyDown(keymap, SDLK_UP))
+        if(isKeyDown(keymap, SDLK_UP) && !invisibles[e].isVisible)
+        {
             invisibles[e].isVisible = true;
-        else
+            std::swap(invisibles[e].invisibleShape, shapes[e].shape);
+        }
+        else if(!isKeyDown(keymap, SDLK_UP) && invisibles[e].isVisible)
+        {
             invisibles[e].isVisible = false;
-
-        if(!invisibles[e].isVisible)
-            shapes[e].shape = (std::size_t)ShapeDef::NONE;
-        else
-            shapes[e].shape = (std::size_t)ShapeDef::FLAME;
+            std::swap(invisibles[e].invisibleShape, shapes[e].shape);
+        }
     }
 }
 
@@ -759,9 +761,9 @@ void createShip(EntityManager& manager)
     addCVelocity(manager, flame, {0.0f, 0.0f});
     addCScale(manager, flame, {scaleFactor});
     addCRotation(manager, flame, {0.0f, -M_PI/2.0f});
-    addCShape(manager, flame, {(std::size_t)ShapeDef::FLAME, 0xFF0000FF});
+    addCShape(manager, flame, {(std::size_t)ShapeDef::NONE, 0xFF0000FF});
     addCControlMove(manager, flame, {accelFactor, rotateFactor});
-    addCInvisible(manager, flame, {false});
+    addCInvisible(manager, flame, {false, (std::size_t)ShapeDef::FLAME});
 
     Entity ship = addEntity(manager);
 
@@ -882,37 +884,37 @@ int main(int argc, char** argv)
         // Update
         removeEntities(manager);
 
-        auto lifeTimeSysEntities = getEntitesForSystem(manager, lifeTimeBitset);
+        auto& lifeTimeSysEntities = getEntitesForSystem(manager, lifeTimeBitset);
         lifeTimeEntities(lifeTimeSysEntities, manager, frameTime);
         
-        auto saveLastPosSysEntities = getEntitesForSystem(manager, saveLastPosBitset);
+        auto& saveLastPosSysEntities = getEntitesForSystem(manager, saveLastPosBitset);
         saveLastPos(saveLastPosSysEntities, manager);
 
-        auto moveSysEntities = getEntitesForSystem(manager, moveBitset);
+        auto& moveSysEntities = getEntitesForSystem(manager, moveBitset);
         moveEntities(moveSysEntities, manager, frameTime);
 
-        auto rotateSysEntities = getEntitesForSystem(manager, rotateBitset);
+        auto& rotateSysEntities = getEntitesForSystem(manager, rotateBitset);
         rotateEntites(rotateSysEntities, manager, frameTime);
 
-        auto controllerSysEntites = getEntitesForSystem(manager, controlMoveBitset);
+        auto& controllerSysEntites = getEntitesForSystem(manager, controlMoveBitset);
         controllEnities(controllerSysEntites, manager, keymap, frameTime);
 
-        auto invisibleControllSysEntities = getEntitesForSystem(manager, invisibleControllBitset);
+        auto& invisibleControllSysEntities = getEntitesForSystem(manager, invisibleControllBitset);
         showInvisibleEntities(invisibleControllSysEntities, manager, keymap);
 
-        auto canFireSysEntities = getEntitesForSystem(manager, canFireBitset);
+        auto& canFireSysEntities = getEntitesForSystem(manager, canFireBitset);
         fireingEntities(canFireSysEntities, manager, keymap);
 
         // Transform data
         shapeData.clear();
         drawInfo.clear();
 
-        auto makeDataFromEntitesSysEntities = getEntitesForSystem(manager, makeDataFromEntitiesBitset);
+        auto& makeDataFromEntitesSysEntities = getEntitesForSystem(manager, makeDataFromEntitiesBitset);
         makeShapeDataFromEntities(makeDataFromEntitesSysEntities, manager, shapeData, drawInfo);
 
         transformShapes(shapeData, drawInfo);
 
-        auto addBulletToShapeDataSysEntities = getEntitesForSystem(manager, addBulletToShapeDataBitset);
+        auto& addBulletToShapeDataSysEntities = getEntitesForSystem(manager, addBulletToShapeDataBitset);
         addBulletsToShapeData(addBulletToShapeDataSysEntities, manager, shapeData, drawInfo);
 
         // Collision handling
